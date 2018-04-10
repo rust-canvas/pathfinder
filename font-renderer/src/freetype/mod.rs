@@ -12,7 +12,7 @@
 
 use euclid::{Point2D, Size2D, Vector2D};
 use freetype_sys::freetype::{FT_BBox, FT_Bitmap, FT_Done_Face, FT_F26Dot6, FT_Face, FT_Glyph_Format};
-use freetype_sys::freetype::{FT_GlyphSlot, FT_Init_FreeType, FT_Int32, FT_LcdFilter};
+use freetype_sys::freetype::{FT_GlyphSlot, FT_Init_FreeType, FT_Int32, FT_LcdFilter, FT_Get_Char_Index};
 use freetype_sys::freetype::{FT_LOAD_NO_HINTING, FT_Library, FT_Library_SetLcdFilter};
 use freetype_sys::freetype::{FT_Load_Glyph, FT_Long, FT_New_Face, FT_New_Memory_Face};
 use freetype_sys::freetype::{FT_Outline_Get_CBox, FT_Outline_Translate, FT_Pixel_Mode};
@@ -71,12 +71,12 @@ impl<FK> FontContext<FK> where FK: Clone + Hash + Eq + Ord {
     }
 
     /// Loads an OpenType font from memory.
-    /// 
+    ///
     /// `font_key` is a handle that is used to refer to the font later. If this context has already
     /// loaded a font with the same font key, nothing is done, and `Ok` is returned.
-    /// 
+    ///
     /// `bytes` is the raw OpenType data (i.e. the contents of the `.otf` or `.ttf` file on disk).
-    /// 
+    ///
     /// `font_index` is the index of the font within the collection, if `bytes` refers to a
     /// collection (`.ttc`).
     pub fn add_font_from_memory(&mut self, font_key: &FK, bytes: Arc<Vec<u8>>, font_index: u32)
@@ -137,14 +137,23 @@ impl<FK> FontContext<FK> where FK: Clone + Hash + Eq + Ord {
     }
 
     /// Unloads the font with the given font key from memory.
-    /// 
+    ///
     /// If the font isn't loaded, does nothing.
     pub fn delete_font(&mut self, font_key: &FK) {
         self.faces.remove(font_key);
     }
 
+    pub fn get_char_index(&self, font_key: &FK, ch: char) -> Option<u32> {
+        match self.faces.get(font_key) {
+            Some(f) => unsafe {
+                Some(FT_Get_Char_Index(f.face, ch as u64))
+            },
+            None => None,
+        }
+    }
+
     /// Returns the dimensions of the given glyph in the given font.
-    /// 
+    ///
     /// If `exact` is true, then the raw outline extents as specified by the font designer are
     /// returned. These may differ from the extents when rendered on screen, because some font
     /// libraries (including Pathfinder) apply modifications to the outlines: for example, to
@@ -170,7 +179,7 @@ impl<FK> FontContext<FK> where FK: Clone + Hash + Eq + Ord {
     }
 
     /// Uses the FreeType library to rasterize a glyph on CPU.
-    /// 
+    ///
     /// If `exact` is true, then the raw outline extents as specified by the font designer are
     /// returned. These may differ from the extents when rendered on screen, because some font
     /// libraries (including Pathfinder) apply modifications to the outlines: for example, to
@@ -347,10 +356,9 @@ impl<FK> FontContext<FK> where FK: Clone + Hash + Eq + Ord {
     }
 }
 
-struct Face {
-    face: FT_Face,
-    #[allow(dead_code)]
-    bytes: Option<Arc<Vec<u8>>>,
+pub struct Face {
+    pub face: FT_Face,
+    pub bytes: Option<Arc<Vec<u8>>>,
 }
 
 impl Drop for Face {
